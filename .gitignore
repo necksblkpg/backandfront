@@ -1,0 +1,12 @@
+# Ignorera virtuella miljön (Python)
+venv/
+
+# Ignorera node_modules
+frontend/node_modules/
+
+# Ignorera ev. lockfiler
+*.log
+
+# Ignorera miljöfil
+.env
+backend/.env
