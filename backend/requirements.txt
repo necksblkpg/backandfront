@@ -1,4 +1,7 @@
-Flask
-Flask-Cors
-requests
-python-dotenv
+Flask==2.3.3
+Flask-Cors==4.0.0
+requests==2.31.0
+python-dotenv==1.0.0
+pandas==2.1.0
+numpy==1.26.4
+python-dateutil==2.8.2
