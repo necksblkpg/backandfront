@@ -3,6 +3,11 @@ import os
 import requests
 from flask_cors import CORS
 from dotenv import load_dotenv
+import logging
+
+# Sätt upp loggning
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 load_dotenv()  # Ladda miljövariabler från .env
 
@@ -16,28 +21,52 @@ CENTRA_API_URL = "https://scottsberry.centra.com/graphql"
 def index():
     return "Flask-proxy igång. Använd /api/graphql för GraphQL-anrop."
 
-@app.route("/api/graphql", methods=["GET", "POST"])
-def graphql_proxy():
-    if not CENTRA_API_TOKEN:
-        return Response("CENTRA_API_TOKEN saknas!", status=500)
-
-    headers = {"Authorization": f"Bearer {CENTRA_API_TOKEN}"}
+@app.route("/api/graphql", methods=['POST'])
+def proxy_graphql():
     try:
-        if request.method == "GET":
-            resp = requests.get(CENTRA_API_URL, headers=headers, params=request.args)
-        else:
-            if request.is_json:
-                resp = requests.post(CENTRA_API_URL, headers=headers, json=request.get_json())
-            else:
-                resp = requests.post(CENTRA_API_URL, headers=headers, data=request.data)
-    except Exception as e:
-        return Response(f"Fel vid anrop mot Centra: {str(e)}", status=500)
+        if not CENTRA_API_TOKEN:
+            logger.error("CENTRA_API_TOKEN saknas")
+            return {"error": "API token saknas"}, 401
 
-    return Response(
-        resp.content,
-        status=resp.status_code,
-        content_type=resp.headers.get('Content-Type')
-    )
+        # Logga inkommande request
+        data = request.json
+        logger.debug(f"Inkommande GraphQL-query: {data}")
+
+        # Sätt upp headers för Centra API
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {CENTRA_API_TOKEN}"
+        }
+        
+        # Gör anropet till Centra
+        response = requests.post(
+            CENTRA_API_URL,
+            json=data,
+            headers=headers,
+            timeout=30
+        )
+
+        # Logga svaret
+        logger.debug(f"Centra API svarade med status: {response.status_code}")
+        logger.debug(f"Centra API svar: {response.text[:200]}...")  # Logga första 200 tecken
+
+        # Om vi får ett fel från Centra
+        if not response.ok:
+            logger.error(f"Centra API fel: {response.text}")
+            return Response(
+                response.text,
+                status=response.status_code,
+                content_type='application/json'
+            )
+
+        return Response(
+            response.text,
+            status=200,
+            content_type='application/json'
+        )
+    except Exception as e:
+        logger.exception("Ett fel uppstod vid hantering av GraphQL-anropet")
+        return {"error": str(e)}, 500
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)

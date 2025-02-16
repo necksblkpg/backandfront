@@ -1,11 +1,13 @@
 import { gql } from '@apollo/client'
 
-export const GET_PRODUCT_STOCKS = gql`
-  query ProductStocks($limit: Int!, $page: Int!) {
+// Dela upp queries för bättre prestanda
+export const GET_WAREHOUSE_STOCK = gql`
+  query WarehouseStock($limit: Int!, $page: Int!) {
     warehouses {
       stock(limit: $limit, page: $page) {
         productSize {
           quantity
+          description
           size {
             name
           }
@@ -16,9 +18,62 @@ export const GET_PRODUCT_STOCKS = gql`
               status
               productNumber
               isBundle
+              collection {
+                name
+              }
+              variants {
+                unitCost {
+                  value
+                  currency {
+                    code
+                  }
+                }
+              }
             }
           }
         }
+      }
+    }
+  }
+`
+
+export const GET_PRODUCT_COSTS = gql`
+  query ProductCosts($productIds: [Int!]!) {
+    products(ids: $productIds) {
+      id
+      variants {
+        unitCost {
+          value
+          currency {
+            code
+            name
+          }
+        }
+      }
+    }
+  }
+`
+
+export const GET_ORDERS = gql`
+  query Orders($from: DateTimeTz!, $to: DateTimeTz!, $page: Int!, $limit: Int!) {
+    orders(
+      limit: $limit,
+      page: $page,
+      where: { 
+        orderDate: { from: $from, to: $to },
+        status: [SHIPPED]
+      }
+    ) {
+      orderDate
+      status
+      lines {
+        productVariant {
+          product {
+            id
+          }
+        }
+        size
+        quantity
       }
     }
   }
