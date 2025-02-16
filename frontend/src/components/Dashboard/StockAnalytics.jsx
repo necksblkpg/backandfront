@@ -35,6 +35,7 @@ import {
 import { gql } from '@apollo/client';
 import DownloadIcon from '@mui/icons-material/Download';
 import InfoIcon from '@mui/icons-material/Info';
+import PurchaseOrder from './PurchaseOrder';
 
 // GraphQL query definition
 const GET_STOCK_DATA = gql`
@@ -72,6 +73,13 @@ const STOCK_THRESHOLDS = {
   MEDIUM: 20,
 };
 
+// Lägg till efter STOCK_THRESHOLDS
+const REORDER_POINT = {
+  HIGH_PRIORITY: 5,  // Kritisk nivå - behöver beställas omgående
+  MEDIUM_PRIORITY: 15, // Bör beställas snart
+  SAFETY_STOCK: 10,  // Minimum lagernivå vi vill ha
+};
+
 // Move helper functions outside component
 const processDistributionData = (distribution) => {
   return Object.entries(distribution).map(([key, value]) => {
@@ -106,8 +114,11 @@ const StockAnalytics = () => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState({ loaded: 0, total: '?' });
   const [hasMoreProducts, setHasMoreProducts] = useState(true);
+  const [sortOrder, setSortOrder] = useState('priority'); // 'priority', 'stock', 'value'
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [purchaseOrderOpen, setPurchaseOrderOpen] = useState(false);
 
-  const { loading, error, data, fetchMore } = useQuery(GET_STOCK_DATA, {
+  const { loading, error, data, fetchMore, refetch } = useQuery(GET_STOCK_DATA, {
     variables: { limit: 100, page: 1 },
     fetchPolicy: 'network-only',
     onCompleted: async (data) => {
@@ -195,11 +206,6 @@ const StockAnalytics = () => {
     return ['all', ...new Set(data.products.map(product => product.collection?.name).filter(Boolean))];
   }, [data]);
 
-  const insights = useMemo(() => {
-    if (!stockData) return [];
-    return generateInsights(stockData);
-  }, [stockData]);
-
   // Callbacks
   const handlePieClick = useCallback((data) => {
     if (data.name === 'Ingen kollektion') {
@@ -230,6 +236,65 @@ const StockAnalytics = () => {
   const handleFilterByChange = useCallback((e) => {
     setFilterBy(e.target.value);
   }, []);
+
+  const getPurchaseRecommendations = useCallback((items) => {
+    return items
+      .map(item => {
+        let priority = 0;
+        let status = 'OK';
+        let recommendation = '';
+        
+        // Beräkna prioritet baserat på lagernivå
+        if (item.stock === 0) {
+          priority = 100;
+          status = 'KRITISK';
+          recommendation = 'Beställ omgående';
+        } else if (item.stock < REORDER_POINT.HIGH_PRIORITY) {
+          priority = 75;
+          status = 'HÖG';
+          recommendation = 'Beställ inom 24h';
+        } else if (item.stock < REORDER_POINT.MEDIUM_PRIORITY) {
+          priority = 50;
+          status = 'MEDIUM';
+          recommendation = 'Beställ inom en vecka';
+        } else if (item.stock < REORDER_POINT.SAFETY_STOCK) {
+          priority = 25;
+          status = 'LÅG';
+          recommendation = 'Planera inköp';
+        }
+
+        return {
+          ...item,
+          priority,
+          status,
+          recommendation,
+          suggested_order: Math.max(REORDER_POINT.SAFETY_STOCK - item.stock, 0)
+        };
+      })
+      .filter(item => item.priority > 0)
+      .sort((a, b) => b.priority - a.priority);
+  }, []);
+
+  const purchaseRecommendations = useMemo(() => {
+    if (!stockData?.all_items) return [];
+    return getPurchaseRecommendations(stockData.all_items);
+  }, [stockData, getPurchaseRecommendations]);
+
+  const handleCreatePurchaseOrder = (items) => {
+    setSelectedItems(items.map(item => ({
+      ...item,
+      quantity: item.suggested_order
+    })));
+    setPurchaseOrderOpen(true);
+  };
+
+  const handlePurchaseOrderClose = (success) => {
+    setPurchaseOrderOpen(false);
+    if (success) {
+      // Uppdatera data efter lyckad order
+      refetch();
+    }
+  };
 
   if (loading || isLoadingMore) {
     return (
@@ -308,43 +373,6 @@ const StockAnalytics = () => {
         </Stack>
       </Grid>
 
-      {/* Insights Section */}
-      <Grid item xs={12}>
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" component="div">
-                Insikter och Rekommendationer
-              </Typography>
-              <MuiTooltip title="Automatiskt genererade insikter baserade på aktuell lagerdata">
-                <InfoIcon sx={{ ml: 1, color: 'action.active' }} />
-              </MuiTooltip>
-            </Box>
-            <Grid container spacing={2}>
-              {insights.map((insight, index) => (
-                <Grid item xs={12} md={6} lg={4} key={index}>
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Typography variant="subtitle1" color="primary" gutterBottom>
-                        {insight.title}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {insight.description}
-                      </Typography>
-                      {insight.action && (
-                        <Typography variant="body2" color="primary" sx={{ mt: 1 }}>
-                          Rekommendation: {insight.action}
-                        </Typography>
-                      )}
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          </CardContent>
-        </Card>
-      </Grid>
-
       {/* Summary Cards */}
       <Grid item xs={12} md={4}>
         <Card>
@@ -396,102 +424,6 @@ const StockAnalytics = () => {
             <Typography variant="body1">
               Största kollektion: {stockData.largest_collection}
             </Typography>
-          </CardContent>
-        </Card>
-      </Grid>
-
-      {/* Enhanced Charts */}
-      <Grid item xs={12} md={6}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Lagerdistribution
-            </Typography>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={distributionData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip 
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      return (
-                        <Box sx={{ bgcolor: 'background.paper', p: 1, border: 1, borderColor: 'grey.300' }}>
-                          <Typography variant="body2">
-                            {payload[0].payload.name}: {payload[0].value}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {payload[0].payload.percentage} av totalen
-                          </Typography>
-                        </Box>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Bar 
-                  dataKey="value" 
-                  fill="#8884d8"
-                  onClick={(data) => setStockThreshold(data.name.toLowerCase().replace(' ', '_'))}
-                  cursor="pointer"
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </Grid>
-
-      <Grid item xs={12} md={6}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Fördelning per kollektion
-            </Typography>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={collectionData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  fill="#8884d8"
-                  label={({ name, percentage }) => `${name} (${percentage})`}
-                  onClick={handlePieClick}
-                  cursor="pointer"
-                >
-                  {collectionData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={COLORS[index % COLORS.length]}
-                      stroke={entry.name === filterBy ? '#000' : undefined}
-                      strokeWidth={entry.name === filterBy ? 2 : 1}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      return (
-                        <Box sx={{ bgcolor: 'background.paper', p: 1, border: 1, borderColor: 'grey.300' }}>
-                          <Typography variant="body2">
-                            {payload[0].name}
-                          </Typography>
-                          <Typography variant="body2">
-                            Antal: {payload[0].value}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {payload[0].payload.percentage} av totalen
-                          </Typography>
-                        </Box>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
           </CardContent>
         </Card>
       </Grid>
@@ -564,6 +496,13 @@ const StockAnalytics = () => {
           </CardContent>
         </Card>
       </Grid>
+
+      {/* Add PurchaseOrder component */}
+      <PurchaseOrder
+        open={purchaseOrderOpen}
+        onClose={handlePurchaseOrderClose}
+        selectedItems={selectedItems}
+      />
     </Grid>
   );
 };
@@ -663,58 +602,6 @@ const getStockLevelColor = (stock) => {
     high: 'success'
   };
   return colors[level];
-};
-
-// Enhanced insights generation
-const generateInsights = (stockData) => {
-  const insights = [];
-  
-  // Analyze out of stock items
-  if (stockData.stock_distribution.out_of_stock > 0) {
-    insights.push({
-      title: 'Kritiska lagernivåer',
-      description: `${stockData.stock_distribution.out_of_stock} produkter är slut i lager.`,
-      action: 'Prioritera påfyllning av dessa produkter för att undvika missade försäljningsmöjligheter.'
-    });
-  }
-
-  // Analyze low stock items
-  if (stockData.stock_distribution.low_stock > 0) {
-    insights.push({
-      title: 'Låga lagernivåer',
-      description: `${stockData.stock_distribution.low_stock} produkter har mindre än ${STOCK_THRESHOLDS.LOW} enheter i lager.`,
-      action: 'Planera inköp inom de närmaste dagarna.'
-    });
-  }
-
-  // Analyze collection distribution
-  const largestCollectionPercentage = Math.round(
-    (stockData.collection_distribution[stockData.largest_collection] / 
-    Object.values(stockData.collection_distribution).reduce((a, b) => a + b)) * 100
-  );
-  
-  insights.push({
-    title: 'Kollektionsanalys',
-    description: `"${stockData.largest_collection}" är största kollektionen med ${largestCollectionPercentage}% av lagret.`,
-    action: largestCollectionPercentage > 50 ? 
-      'Överväg att diversifiera lagret med fler kollektioner.' : 
-      'Lagret har en bra fördelning mellan kollektioner.'
-  });
-
-  // Analyze stock value
-  const averageValue = stockData.total_value / stockData.total_items;
-  insights.push({
-    title: 'Ekonomisk översikt',
-    description: `Genomsnittligt värde per artikel: ${new Intl.NumberFormat('sv-SE', { 
-      style: 'currency', 
-      currency: 'SEK' 
-    }).format(averageValue)}`,
-    action: averageValue > 1000 ? 
-      'Högt genomsnittsvärde - säkerställ att säkerhetsrutiner följs.' : 
-      'Normalt genomsnittsvärde - fortsätt med nuvarande rutiner.'
-  });
-
-  return insights;
 };
 
 // Enhanced CSV generation
