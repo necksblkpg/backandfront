@@ -1,6 +1,6 @@
-import { gql } from '@apollo/client'
+import { gql } from "@apollo/client";
 
-// Dela upp queries för bättre prestanda
+// Query för lagerdata
 export const GET_WAREHOUSE_STOCK = gql`
   query WarehouseStock($limit: Int!, $page: Int!) {
     warehouses {
@@ -35,7 +35,7 @@ export const GET_WAREHOUSE_STOCK = gql`
       }
     }
   }
-`
+`;
 
 export const GET_PRODUCT_COSTS = gql`
   query ProductCosts($productIds: [Int!]!) {
@@ -52,14 +52,14 @@ export const GET_PRODUCT_COSTS = gql`
       }
     }
   }
-`
+`;
 
 export const GET_ORDERS = gql`
   query Orders($from: DateTimeTz!, $to: DateTimeTz!, $page: Int!, $limit: Int!) {
     orders(
       limit: $limit,
       page: $page,
-      where: { 
+      where: {
         orderDate: { from: $from, to: $to },
         status: [SHIPPED]
       }
@@ -77,4 +77,29 @@ export const GET_ORDERS = gql`
       }
     }
   }
-`
+`;
+
+// Uppdaterad query för försäljningsdata med "size"
+export const GET_SALES_ORDERS = gql`
+  query SalesOrders($from: DateTimeTz!, $to: DateTimeTz!, $page: Int!, $limit: Int!) {
+    orders(
+      limit: $limit,
+      page: $page,
+      where: { orderDate: { from: $from, to: $to } }
+    ) {
+      orderDate
+      lines {
+        productVariant {
+          product {
+            id
+            name
+            productNumber
+            status
+          }
+        }
+        size
+        quantity
+      }
+    }
+  }
+`;

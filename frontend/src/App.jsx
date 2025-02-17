@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   CssBaseline,
   Box,
@@ -10,36 +10,18 @@ import {
   Paper,
   Tabs,
   Tab,
-} from '@mui/material';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import StockAnalytics from './components/Dashboard/StockAnalytics';
+} from "@mui/material";
+import { ThemeProvider, createTheme } from "@mui/material/styles";
+import StockAndSalesTable from "./components/Dashboard/StockAndSalesTable.jsx";
 
-// Skapa ett tema med svenska som standardspråk
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-  },
-  typography: {
-    fontFamily: [
-      '-apple-system',
-      'BlinkMacSystemFont',
-      '"Segoe UI"',
-      'Roboto',
-      '"Helvetica Neue"',
-      'Arial',
-      'sans-serif',
-    ].join(','),
-  },
-});
-
-function TabPanel({ children, value, index }) {
+function TabPanel(props) {
+  const { children, value, index, ...other } = props;
   return (
-    <div role="tabpanel" hidden={value !== index}>
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      {...other}
+    >
       {value === index && <Box p={3}>{children}</Box>}
     </div>
   );
@@ -52,6 +34,28 @@ function App() {
     setCurrentTab(newValue);
   };
 
+  const theme = createTheme({
+    palette: {
+      primary: {
+        main: "#1976d2",
+      },
+      secondary: {
+        main: "#dc004e",
+      },
+    },
+    typography: {
+      fontFamily: [
+        "-apple-system",
+        "BlinkMacSystemFont",
+        '"Segoe UI"',
+        "Roboto",
+        '"Helvetica Neue"',
+        "Arial",
+        "sans-serif",
+      ].join(","),
+    },
+  });
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -63,11 +67,10 @@ function App() {
             </Typography>
           </Toolbar>
         </AppBar>
-        
         <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
           <Grid container spacing={3}>
             <Grid item xs={12}>
-              <Paper sx={{ width: '100%', mb: 2 }}>
+              <Paper sx={{ width: "100%", mb: 2 }}>
                 <Tabs
                   value={currentTab}
                   onChange={handleTabChange}
@@ -75,14 +78,14 @@ function App() {
                   textColor="primary"
                   centered
                 >
-                  <Tab label="Lageranalys" />
+                  <Tab label="Lager och försäljning" />
+                  {/* Lägg till fler flikar här om du vill */}
                 </Tabs>
               </Paper>
             </Grid>
-            
             <Grid item xs={12}>
               <TabPanel value={currentTab} index={0}>
-                <StockAnalytics />
+                <StockAndSalesTable />
               </TabPanel>
             </Grid>
           </Grid>
