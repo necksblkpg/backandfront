@@ -14,16 +14,4 @@ def analyze_stock():
         analysis = analytics.analyze_stock_levels(data['products'])
         return jsonify(analysis)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@analytics_routes.route('/analyze/orders', methods=['POST'])
-def analyze_orders():
-    try:
-        data = request.json
-        if not data or 'orders' not in data:
-            return jsonify({"error": "Ingen orderdata tillhandahållen"}), 400
-        
-        analysis = analytics.analyze_order_trends(data['orders'])
-        return jsonify(analysis)
-    except Exception as e:
         return jsonify({"error": str(e)}), 500 

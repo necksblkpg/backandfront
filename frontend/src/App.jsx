@@ -13,7 +13,6 @@ import {
 } from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import StockAnalytics from './components/Dashboard/StockAnalytics';
-import OrderAnalytics from './components/Dashboard/OrderAnalytics';
 
 // Skapa ett tema med svenska som standardspråk
 const theme = createTheme({
@@ -77,7 +76,6 @@ function App() {
                   centered
                 >
                   <Tab label="Lageranalys" />
-                  <Tab label="Orderanalys" />
                 </Tabs>
               </Paper>
             </Grid>
@@ -85,9 +83,6 @@ function App() {
             <Grid item xs={12}>
               <TabPanel value={currentTab} index={0}>
                 <StockAnalytics />
-              </TabPanel>
-              <TabPanel value={currentTab} index={1}>
-                <OrderAnalytics />
               </TabPanel>
             </Grid>
           </Grid>

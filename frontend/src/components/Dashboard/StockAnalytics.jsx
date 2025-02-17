@@ -35,7 +35,6 @@ import {
 import { gql } from '@apollo/client';
 import DownloadIcon from '@mui/icons-material/Download';
 import InfoIcon from '@mui/icons-material/Info';
-import PurchaseOrder from './PurchaseOrder';
 
 // GraphQL query definition
 const GET_STOCK_DATA = gql`
@@ -73,13 +72,6 @@ const STOCK_THRESHOLDS = {
   MEDIUM: 20,
 };
 
-// Lägg till efter STOCK_THRESHOLDS
-const REORDER_POINT = {
-  HIGH_PRIORITY: 5,  // Kritisk nivå - behöver beställas omgående
-  MEDIUM_PRIORITY: 15, // Bör beställas snart
-  SAFETY_STOCK: 10,  // Minimum lagernivå vi vill ha
-};
-
 // Move helper functions outside component
 const processDistributionData = (distribution) => {
   return Object.entries(distribution).map(([key, value]) => {
@@ -108,17 +100,13 @@ const processCollectionData = (distribution) => {
 const StockAnalytics = () => {
   const [filterBy, setFilterBy] = useState('all');
   const [stockThreshold, setStockThreshold] = useState('all');
-  const [selectedCollection, setSelectedCollection] = useState(null);
   const [allProducts, setAllProducts] = useState([]);
   const [page, setPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState({ loaded: 0, total: '?' });
   const [hasMoreProducts, setHasMoreProducts] = useState(true);
-  const [sortOrder, setSortOrder] = useState('priority'); // 'priority', 'stock', 'value'
-  const [selectedItems, setSelectedItems] = useState([]);
-  const [purchaseOrderOpen, setPurchaseOrderOpen] = useState(false);
 
-  const { loading, error, data, fetchMore, refetch } = useQuery(GET_STOCK_DATA, {
+  const { loading, error, data, fetchMore } = useQuery(GET_STOCK_DATA, {
     variables: { limit: 100, page: 1 },
     fetchPolicy: 'network-only',
     onCompleted: async (data) => {
@@ -237,65 +225,6 @@ const StockAnalytics = () => {
     setFilterBy(e.target.value);
   }, []);
 
-  const getPurchaseRecommendations = useCallback((items) => {
-    return items
-      .map(item => {
-        let priority = 0;
-        let status = 'OK';
-        let recommendation = '';
-        
-        // Beräkna prioritet baserat på lagernivå
-        if (item.stock === 0) {
-          priority = 100;
-          status = 'KRITISK';
-          recommendation = 'Beställ omgående';
-        } else if (item.stock < REORDER_POINT.HIGH_PRIORITY) {
-          priority = 75;
-          status = 'HÖG';
-          recommendation = 'Beställ inom 24h';
-        } else if (item.stock < REORDER_POINT.MEDIUM_PRIORITY) {
-          priority = 50;
-          status = 'MEDIUM';
-          recommendation = 'Beställ inom en vecka';
-        } else if (item.stock < REORDER_POINT.SAFETY_STOCK) {
-          priority = 25;
-          status = 'LÅG';
-          recommendation = 'Planera inköp';
-        }
-
-        return {
-          ...item,
-          priority,
-          status,
-          recommendation,
-          suggested_order: Math.max(REORDER_POINT.SAFETY_STOCK - item.stock, 0)
-        };
-      })
-      .filter(item => item.priority > 0)
-      .sort((a, b) => b.priority - a.priority);
-  }, []);
-
-  const purchaseRecommendations = useMemo(() => {
-    if (!stockData?.all_items) return [];
-    return getPurchaseRecommendations(stockData.all_items);
-  }, [stockData, getPurchaseRecommendations]);
-
-  const handleCreatePurchaseOrder = (items) => {
-    setSelectedItems(items.map(item => ({
-      ...item,
-      quantity: item.suggested_order
-    })));
-    setPurchaseOrderOpen(true);
-  };
-
-  const handlePurchaseOrderClose = (success) => {
-    setPurchaseOrderOpen(false);
-    if (success) {
-      // Uppdatera data efter lyckad order
-      refetch();
-    }
-  };
-
   if (loading || isLoadingMore) {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '50vh', gap: 2 }}>
@@ -315,7 +244,7 @@ const StockAnalytics = () => {
     );
   }
 
-  if (!stockData) {
+  if (!stockData || !stockData.all_items) {
     return (
       <Alert severity="info" sx={{ m: 2 }}>
         Ingen lagerdata tillgänglig
@@ -371,61 +300,6 @@ const StockAnalytics = () => {
             Exportera data
           </Button>
         </Stack>
-      </Grid>
-
-      {/* Summary Cards */}
-      <Grid item xs={12} md={4}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Totalt Lagervärde
-            </Typography>
-            <Typography variant="h4">
-              {new Intl.NumberFormat('sv-SE', {
-                style: 'currency',
-                currency: 'SEK',
-              }).format(stockData.total_value)}
-            </Typography>
-            <Typography color="textSecondary">
-              Totalt antal artiklar: {stockData.total_items}
-            </Typography>
-          </CardContent>
-        </Card>
-      </Grid>
-
-      <Grid item xs={12} md={4}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Lagerstatus
-            </Typography>
-            <Typography variant="body1">
-              Slut i lager: {stockData.stock_distribution.out_of_stock}
-            </Typography>
-            <Typography variant="body1">
-              Lågt lager: {stockData.stock_distribution.low_stock}
-            </Typography>
-            <Typography variant="body1">
-              Välfyllt lager: {stockData.stock_distribution.medium_stock + stockData.stock_distribution.high_stock}
-            </Typography>
-          </CardContent>
-        </Card>
-      </Grid>
-
-      <Grid item xs={12} md={4}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Kollektionsöversikt
-            </Typography>
-            <Typography variant="body1">
-              Antal kollektioner: {Object.keys(stockData.collection_distribution).length}
-            </Typography>
-            <Typography variant="body1">
-              Största kollektion: {stockData.largest_collection}
-            </Typography>
-          </CardContent>
-        </Card>
       </Grid>
 
       {/* All Products List */}
@@ -496,13 +370,6 @@ const StockAnalytics = () => {
           </CardContent>
         </Card>
       </Grid>
-
-      {/* Add PurchaseOrder component */}
-      <PurchaseOrder
-        open={purchaseOrderOpen}
-        onClose={handlePurchaseOrderClose}
-        selectedItems={selectedItems}
-      />
     </Grid>
   );
 };
